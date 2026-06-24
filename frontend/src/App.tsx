@@ -11,6 +11,7 @@ import { ProfileView } from './components/ProfileView';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { NotificationCenterView } from './components/NotificationCenterView';
 import { LoginView } from './components/LoginView';
+import { useAuth } from './context/AuthContext';
 
 import { 
   UserProfile, 
@@ -35,6 +36,7 @@ import {
 } from './data';
 
 export default function App() {
+  const { user, logout, loading } = useAuth();
   // --- Persistent Local Database State ---
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('gradify_profile');
@@ -523,7 +525,11 @@ export default function App() {
       case 'profile':
         return (
           <ProfileView 
-            profile={profile}
+            profile={{
+              ...profile,
+              name: user ? `${user.firstName} ${user.lastName}` : profile.name,
+              email: user ? user.email : profile.email
+            }}
             activityLogs={activityLogs}
             onUpdateProfile={handleUpdateProfile}
             onClearLogs={handleClearLogs}
@@ -546,8 +552,22 @@ export default function App() {
     }
   };
 
-  if (!isLoggedIn) {
-    return <LoginView onLoginSuccess={() => setIsLoggedIn(true)} />;
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 font-sans text-slate-550">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="animate-spin h-8 w-8 text-indigo-650" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="text-xs font-bold uppercase tracking-wider">Syncing Sessions...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView onLoginSuccess={() => {}} />;
   }
 
   return (
@@ -557,12 +577,13 @@ export default function App() {
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
-        profile={profile} 
+        profile={{
+          ...profile,
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email
+        }} 
         unreadCount={unreadCount}
-        onLogout={() => {
-          localStorage.removeItem('ssp_is_logged_in');
-          setIsLoggedIn(false);
-        }}
+        onLogout={logout}
       />
 
       {/* 2. Main content flow (Header + active viewport view) */}
@@ -575,7 +596,11 @@ export default function App() {
           semesters={semesters}
           unreadCount={unreadCount}
           activeTab={activeTab}
-          profile={profile}
+          profile={{
+            ...profile,
+            name: `${user.firstName} ${user.lastName}`,
+            email: user.email
+          }}
           setNotificationOpen={setNotificationOpen}
           setActiveTab={setActiveTab}
         />

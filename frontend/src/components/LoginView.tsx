@@ -19,18 +19,28 @@ import {
   Target,
   BarChart3
 } from 'lucide-react';
+import { loginUser, registerUser } from '../api/authApi';
+import { useAuth } from '../context/AuthContext';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+  const { loadUser } = useAuth();
+
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   
+  // Register Form State
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+
   // Interaction/Validation state
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -76,31 +86,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     return isValid;
   };
 
-  const handleSignInSubmit = (e: React.FormEvent) => {
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setIsSubmitting(true);
     setGeneralError('');
 
-    // Simulate standard authentications validation
-    setTimeout(() => {
-      // Allow any login with standard length, but demo password check if users type "wrong"
-      if (password === '12345') {
-        setPasswordError('Incorrect password signature detected. Please try another key.');
-        setIsSubmitting(false);
-        return;
-      }
-
+    try {
+      const response = await loginUser({ email, password });
+      localStorage.setItem("token", response.token);
+      localStorage.setItem('ssp_is_logged_in', 'true');
+      await loadUser();
+      
       setIsSubmitting(false);
       setLoginSuccess(true);
-
-      // Save token state
       setTimeout(() => {
-        localStorage.setItem('ssp_is_logged_in', 'true');
         onLoginSuccess();
       }, 1000);
-    }, 1500);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      const errMsg = err?.response?.data?.message || 'Invalid credentials';
+      setGeneralError(errMsg);
+      setPasswordError(errMsg);
+    }
   };
 
   const handleThirdPartySignIn = (provider: 'google' | 'microsoft') => {
@@ -129,21 +138,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }, 1000);
   };
 
-  const handleMockRegister = (e: React.FormEvent) => {
+  const handleMockRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!regFirstName || !regLastName || !regEmail || !regPassword) {
       setGeneralError('All core registration credential items are required.');
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
+    setGeneralError('');
+    try {
+      await registerUser({
+        firstName: regFirstName,
+        lastName: regLastName,
+        email: regEmail,
+        password: regPassword
+      });
       setIsSubmitting(false);
-      setLoginSuccess(true);
-      setTimeout(() => {
-        localStorage.setItem('ssp_is_logged_in', 'true');
-        onLoginSuccess();
-      }, 1000);
-    }, 1500);
+      alert("Registration successful! Directing to Sign In.");
+      setActiveFormType('signin');
+      setEmail(regEmail);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setGeneralError(err?.response?.data?.message || 'Registration failed');
+      alert(err?.response?.data?.message || 'Registration failed');
+    }
   };
 
   return (
@@ -469,14 +487,29 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </div>
 
               <form onSubmit={handleMockRegister} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">Student Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter school register name"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold"
-                  />
+                <div className="flex gap-3">
+                  <div className="space-y-1 flex-1">
+                    <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">First Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={regFirstName}
+                      onChange={(e) => setRegFirstName(e.target.value)}
+                      placeholder="First Name"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:bg-white focus:border-indigo-650"
+                    />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">Last Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={regLastName}
+                      onChange={(e) => setRegLastName(e.target.value)}
+                      placeholder="Last Name"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:bg-white focus:border-indigo-650"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -484,8 +517,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <input
                     type="email"
                     required
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
                     placeholder="name@university.edu"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:bg-white focus:border-indigo-650"
                   />
                 </div>
 
@@ -494,14 +529,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   <input
                     type="password"
                     required
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
                     placeholder="Min 6 characters recommended"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-semibold outline-none focus:bg-white focus:border-indigo-650"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl cursor-pointer"
                 >
                   Register Student Account
                 </button>

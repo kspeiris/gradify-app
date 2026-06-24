@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -42,6 +42,7 @@ import {
   Printer
 } from 'lucide-react';
 import { UserProfile, ActivityLog } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfileViewProps {
   profile: UserProfile;
@@ -60,6 +61,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onClearLogs,
   setActiveTab
 }) => {
+  const { user } = useAuth();
   // Tabs & Views setup
   const [activeTabSetting, setActiveTabSetting] = useState<SettingsTab>('general');
   const [emptyStateActive, setEmptyStateActive] = useState<boolean>(false);
@@ -121,6 +123,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [accentColor, setAccentColor] = useState<string>('indigo');
   const [gradeScaleFormat, setGradeScaleFormat] = useState<string>('gpa-four-point');
   const [weekendAlerts, setWeekendAlerts] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (user) {
+      setName(`${user.firstName} ${user.lastName}`);
+      setEmail(user.email);
+    }
+  }, [user]);
 
   // Profile Analytics Widget details
   const accountCreatedDate = "September 1, 2023";
@@ -382,7 +391,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                     <h3 id="student-main-id-name" className="text-xl font-black text-slate-850 tracking-tight">{name}</h3>
                     <span className="text-[9px] font-bold font-mono text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 uppercase">
-                      First Class Standing
+                      {user?.role?.name || "STUDENT"}
                     </span>
                   </div>
                   
