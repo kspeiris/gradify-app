@@ -1,9 +1,12 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 
 const app = require("./app");
 
-const PORT = process.env.PORT || 5001;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+app.listen(
+    process.env.PORT,
+    () => {
+        console.log(
+            `Auth Service Running on ${process.env.PORT}`
+        );
+    }
+);
