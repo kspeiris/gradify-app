@@ -4,6 +4,7 @@ const helmet  = require("helmet");
 const morgan  = require("morgan");
 
 const semesterRoutes = require("./routes/semester.routes");
+const subjectRoutes  = require("./routes/subject.routes");
 
 const app = express();
 
@@ -23,6 +24,9 @@ app.get("/health", (req, res) => {
 
 // Semester routes
 app.use("/api/academic", semesterRoutes);
+
+// Subject routes
+app.use("/api/academic", subjectRoutes);
 
 // 404 handler
 app.use((req, res) => {

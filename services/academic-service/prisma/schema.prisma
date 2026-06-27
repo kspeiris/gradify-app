@@ -13,6 +13,12 @@ enum SemesterStatus {
   ARCHIVED
 }
 
+enum SubjectStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
 model Semester {
   id           Int            @id @default(autoincrement())
   name         String
@@ -23,4 +29,25 @@ model Semester {
   userId       Int
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+
+  subjects Subject[]
+}
+
+model Subject {
+  id           Int           @id @default(autoincrement())
+  code         String
+  name         String
+  credits      Int
+  lecturer     String?
+  description  String?
+  currentGrade String?
+  progress     Int           @default(0)
+  status       SubjectStatus
+  semesterId   Int
+  userId       Int
+
+  semester Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
