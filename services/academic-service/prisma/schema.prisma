@@ -34,17 +34,22 @@ model Semester {
 }
 
 model Subject {
-  id           Int           @id @default(autoincrement())
-  code         String
-  name         String
-  credits      Int
-  lecturer     String?
-  description  String?
-  currentGrade String?
-  progress     Int           @default(0)
-  status       SubjectStatus
-  semesterId   Int
-  userId       Int
+  id             Int           @id @default(autoincrement())
+  code           String
+  name           String
+  credits        Int
+  lecturer       String?       // Map to professorName
+  professorEmail String?
+  description    String?
+  currentGrade   String?
+  progress       Int           @default(0)
+  status         SubjectStatus
+  color          String        @default("blue")
+  room           String?
+  schedule       String?
+  targetGrade    String        @default("A")
+  semesterId     Int
+  userId         Int
 
   semester Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
 

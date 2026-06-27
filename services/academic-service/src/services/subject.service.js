@@ -6,16 +6,21 @@ const prisma = require("../config/prisma");
 exports.createSubject = async (data, userId) => {
     return await prisma.subject.create({
         data: {
-            code:         data.code,
-            name:         data.name,
-            credits:      Number(data.credits),
-            lecturer:     data.lecturer     ?? null,
-            description:  data.description  ?? null,
-            currentGrade: data.currentGrade ?? null,
-            progress:     data.progress     ?? 0,
-            status:       data.status,
-            semesterId:   Number(data.semesterId),
-            userId:       userId,
+            code:           data.code,
+            name:           data.name,
+            credits:        Number(data.credits),
+            lecturer:       data.lecturer       ?? data.professorName ?? null,
+            professorEmail: data.professorEmail ?? null,
+            description:    data.description    ?? null,
+            currentGrade:   data.currentGrade   ?? data.grade ?? null,
+            progress:       data.progress       ?? 0,
+            status:         data.status         ?? 'ACTIVE',
+            color:          data.color          ?? 'blue',
+            room:           data.room           ?? null,
+            schedule:       data.schedule       ?? null,
+            targetGrade:    data.targetGrade    ?? 'A',
+            semesterId:     Number(data.semesterId),
+            userId:         userId,
         },
         include: { semester: true }
     });
@@ -54,17 +59,23 @@ exports.updateSubject = async (id, data, userId) => {
     });
     if (!existing) return null;
 
-    // Build only the fields that were provided
     const updateData = {};
-    if (data.code         !== undefined) updateData.code         = data.code;
-    if (data.name         !== undefined) updateData.name         = data.name;
-    if (data.credits      !== undefined) updateData.credits      = Number(data.credits);
-    if (data.lecturer     !== undefined) updateData.lecturer     = data.lecturer;
-    if (data.description  !== undefined) updateData.description  = data.description;
-    if (data.currentGrade !== undefined) updateData.currentGrade = data.currentGrade;
-    if (data.progress     !== undefined) updateData.progress     = Number(data.progress);
-    if (data.status       !== undefined) updateData.status       = data.status;
-    if (data.semesterId   !== undefined) updateData.semesterId   = Number(data.semesterId);
+    if (data.code           !== undefined) updateData.code           = data.code;
+    if (data.name           !== undefined) updateData.name           = data.name;
+    if (data.credits        !== undefined) updateData.credits        = Number(data.credits);
+    if (data.lecturer       !== undefined) updateData.lecturer       = data.lecturer;
+    if (data.professorName  !== undefined) updateData.lecturer       = data.professorName;
+    if (data.professorEmail !== undefined) updateData.professorEmail = data.professorEmail;
+    if (data.description    !== undefined) updateData.description    = data.description;
+    if (data.currentGrade   !== undefined) updateData.currentGrade   = data.currentGrade;
+    if (data.grade          !== undefined) updateData.currentGrade   = data.grade;
+    if (data.progress       !== undefined) updateData.progress       = Number(data.progress);
+    if (data.status         !== undefined) updateData.status         = data.status;
+    if (data.color          !== undefined) updateData.color          = data.color;
+    if (data.room           !== undefined) updateData.room           = data.room;
+    if (data.schedule       !== undefined) updateData.schedule       = data.schedule;
+    if (data.targetGrade    !== undefined) updateData.targetGrade    = data.targetGrade;
+    if (data.semesterId     !== undefined) updateData.semesterId     = Number(data.semesterId);
 
     return await prisma.subject.update({
         where:   { id: Number(id) },

@@ -1,4 +1,4 @@
-const { body } = require("express-validator");
+const { body, validationResult } = require("express-validator");
 
 exports.createSubjectValidation = [
     body("code")
@@ -14,11 +14,11 @@ exports.createSubjectValidation = [
         .withMessage("Credits must be a positive integer"),
 
     body("semesterId")
-        .isInt()
+        .notEmpty()
         .withMessage("A valid semesterId is required"),
 
     body("status")
-        .notEmpty()
+        .optional()
         .isIn(["ACTIVE", "COMPLETED", "DROPPED"])
         .withMessage("Status must be ACTIVE, COMPLETED, or DROPPED"),
 
@@ -26,6 +26,30 @@ exports.createSubjectValidation = [
         .optional()
         .isInt({ min: 0, max: 100 })
         .withMessage("Progress must be between 0 and 100"),
+
+    body("color")
+        .optional()
+        .isString(),
+
+    body("room")
+        .optional()
+        .isString(),
+
+    body("schedule")
+        .optional()
+        .isString(),
+
+    body("targetGrade")
+        .optional()
+        .isString(),
+
+    body("professorEmail")
+        .optional()
+        .isString(),
+
+    body("professorName")
+        .optional()
+        .isString(),
 ];
 
 exports.updateSubjectValidation = [
@@ -46,7 +70,7 @@ exports.updateSubjectValidation = [
 
     body("semesterId")
         .optional()
-        .isInt()
+        .notEmpty()
         .withMessage("A valid semesterId is required"),
 
     body("status")
@@ -58,10 +82,33 @@ exports.updateSubjectValidation = [
         .optional()
         .isInt({ min: 0, max: 100 })
         .withMessage("Progress must be between 0 and 100"),
+
+    body("color")
+        .optional()
+        .isString(),
+
+    body("room")
+        .optional()
+        .isString(),
+
+    body("schedule")
+        .optional()
+        .isString(),
+
+    body("targetGrade")
+        .optional()
+        .isString(),
+
+    body("professorEmail")
+        .optional()
+        .isString(),
+
+    body("professorName")
+        .optional()
+        .isString(),
 ];
 
 exports.validate = (req, res, next) => {
-    const { validationResult } = require("express-validator");
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(422).json({

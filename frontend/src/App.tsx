@@ -11,6 +11,20 @@ import ProfileView from './components/ProfileView';
 import LoginView from './components/LoginView';
 import RegisterView from './components/RegisterView';
 import { useAuth } from './context/AuthContext';
+import {
+  apiGetSemesters,
+  apiCreateSemester,
+  apiUpdateSemester,
+  apiDeleteSemester,
+  toFrontendSemester
+} from './api/semesterApi';
+import {
+  apiGetSubjects,
+  apiCreateSubject,
+  apiUpdateSubject,
+  apiDeleteSubject,
+  toFrontendSubject
+} from './api/subjectApi';
 
 // Import baseline preloaded data & types
 import {
@@ -197,76 +211,204 @@ export default function App() {
     setNotifications(prev => [alert, ...prev]);
   };
 
-  // ----- SEMESTERS CRUDS -----
-  const handleAddSemester = (name: string, year: number, isCurrent: boolean) => {
-    const newSem: Semester = {
-      id: `sem-${Math.random().toString()}`,
-      name,
-      year,
-      isCurrent: false // Will set cleanly below if true
-    };
-
-    let updatedSemesters = [...semesters, newSem];
-    if (isCurrent) {
-      updatedSemesters = updatedSemesters.map(s => s.id === newSem.id ? { ...s, isCurrent: true } : { ...s, isCurrent: false });
+  // ----- DATA FETCH ON AUTH LOGIN -----
+  useEffect(() => {
+    if (user) {
+      const loadAcademicData = async () => {
+        try {
+          const semRes = await apiGetSemesters();
+          if (semRes.data) {
+            setSemesters(semRes.data.map(toFrontendSemester));
+          }
+          const subRes = await apiGetSubjects();
+          if (subRes.data) {
+            setSubjects(subRes.data.map(toFrontendSubject));
+          }
+        } catch (err) {
+          console.error("Failed to load academic data from backend:", err);
+        }
+      };
+      loadAcademicData();
     }
-    setSemesters(updatedSemesters);
-    triggerNotification('Semester Created', `Semester ${name} was added to curriculum ledger.`, 'success');
+  }, [user]);
+
+  // ----- SEMESTERS CRUDS -----
+  const handleAddSemester = async (name: string, year: number, startDate: string, endDate: string, isCurrent: boolean) => {
+    try {
+      const res = await apiCreateSemester({
+        name,
+        academicYear: String(year),
+        startDate: new Date(startDate).toISOString(),
+        endDate: new Date(endDate).toISOString(),
+        status: isCurrent ? "ACTIVE" : "COMPLETED"
+      });
+      const newSem = toFrontendSemester(res.data);
+      setSemesters(prev => {
+        let updated = [...prev, newSem];
+        if (isCurrent) {
+          updated = updated.map(s => s.id === newSem.id ? { ...s, isCurrent: true } : { ...s, isCurrent: false });
+        }
+        return updated;
+      });
+      triggerNotification('Semester Created', `Semester ${name} was added to curriculum ledger.`, 'success');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to save semester on backend.', 'warning');
+    }
   };
 
-  const handleUpdateSemester = (id: string, name: string, year: number, isCurrent: boolean) => {
-    setSemesters(prev => {
-      const updated = prev.map(s => s.id === id ? { ...s, name, year, isCurrent } : s);
-      if (isCurrent) {
-        return updated.map(s => s.id === id ? { ...s, isCurrent: true } : { ...s, isCurrent: false });
+  const handleUpdateSemester = async (id: string, name: string, year: number, startDate: string, endDate: string, isCurrent: boolean) => {
+    try {
+      const apiId = Number(id);
+      if (!isNaN(apiId)) {
+        // If marking as active, deactivate all other semesters in the backend first
+        if (isCurrent) {
+          const others = semesters.filter(s => s.id !== id && s.isCurrent);
+          await Promise.all(
+            others.map(s => {
+              const otherId = Number(s.id);
+              if (!isNaN(otherId)) return apiUpdateSemester(otherId, { status: "COMPLETED" });
+            })
+          );
+        }
+        await apiUpdateSemester(apiId, {
+          name,
+          academicYear: String(year),
+          startDate: new Date(startDate).toISOString(),
+          endDate: new Date(endDate).toISOString(),
+          status: isCurrent ? "ACTIVE" : "COMPLETED"
+        });
       }
-      return updated;
-    });
-    triggerNotification('Semester Updated', `Semester details for ${name} were revised.`, 'info');
+      setSemesters(prev => {
+        const updated = prev.map(s => s.id === id ? { ...s, name, year, isCurrent } : s);
+        if (isCurrent) {
+          return updated.map(s => s.id === id ? { ...s, isCurrent: true } : { ...s, isCurrent: false });
+        }
+        return updated;
+      });
+      triggerNotification('Semester Updated', `Semester details for ${name} were revised.`, 'info');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to update semester on backend.', 'warning');
+    }
   };
 
-  const handleDeleteSemester = (id: string) => {
-    const target = semesters.find(s => s.id === id);
-    setSemesters(prev => prev.filter(s => s.id !== id));
-    // Cascade erase subjects, assignments, and exams mapping to this semester
-    const targetSubIds = subjects.filter(s => s.semesterId === id).map(s => s.id);
-    setSubjects(prev => prev.filter(s => s.semesterId !== id));
-    setAssignments(prev => prev.filter(a => !targetSubIds.includes(a.subjectId)));
-    setExams(prev => prev.filter(e => !targetSubIds.includes(e.subjectId)));
-    
-    triggerNotification('Semester Wiped', `Erase operations deleted ${target?.name || 'semester'} and its course credentials cascading.`, 'warning');
+  const handleDeleteSemester = async (id: string) => {
+    try {
+      const apiId = Number(id);
+      if (!isNaN(apiId)) {
+        await apiDeleteSemester(apiId);
+      }
+      const target = semesters.find(s => s.id === id);
+      setSemesters(prev => prev.filter(s => s.id !== id));
+      // Cascade erase subjects, assignments, and exams mapping to this semester
+      const targetSubIds = subjects.filter(s => s.semesterId === id).map(s => s.id);
+      setSubjects(prev => prev.filter(s => s.semesterId !== id));
+      setAssignments(prev => prev.filter(a => !targetSubIds.includes(a.subjectId)));
+      setExams(prev => prev.filter(e => !targetSubIds.includes(e.subjectId)));
+      
+      triggerNotification('Semester Wiped', `Erase operations deleted ${target?.name || 'semester'} and its course credentials cascading.`, 'warning');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to delete semester on backend.', 'warning');
+    }
   };
 
-  const handleSetCurrentSemester = (id: string) => {
-    const target = semesters.find(s => s.id === id);
-    setSemesters(prev => prev.map(s => s.id === id ? { ...s, isCurrent: true } : { ...s, isCurrent: false }));
-    triggerNotification('Active Period Changed', `Active workbook pointer switched to ${target?.name || 'selected semester'}.`, 'info');
+  const handleSetCurrentSemester = async (id: string) => {
+    try {
+      const apiId = Number(id);
+      // Deactivate all currently-ACTIVE semesters in the backend first
+      const activeSems = semesters.filter(s => s.isCurrent && s.id !== id);
+      await Promise.all(
+        activeSems.map(s => {
+          const otherId = Number(s.id);
+          if (!isNaN(otherId)) return apiUpdateSemester(otherId, { status: "COMPLETED" });
+        })
+      );
+      if (!isNaN(apiId)) {
+        await apiUpdateSemester(apiId, { status: "ACTIVE" });
+      }
+      const target = semesters.find(s => s.id === id);
+      setSemesters(prev => prev.map(s => s.id === id ? { ...s, isCurrent: true } : { ...s, isCurrent: false }));
+      triggerNotification('Active Period Changed', `Active workbook pointer switched to ${target?.name || 'selected semester'}.`, 'info');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to set active semester on backend.', 'warning');
+    }
   };
 
   // ----- SUBJECTS CRUDS -----
-  const handleAddSubject = (newSub: Omit<Subject, 'id'>) => {
-    const payload: Subject = {
-      ...newSub,
-      id: `sub-${Math.random().toString()}`
-    };
-    setSubjects(prev => [...prev, payload]);
-    triggerNotification('Course Registered', `Curricular record for ${newSub.code}: ${newSub.name} created.`, 'success');
+  const handleAddSubject = async (newSub: Omit<Subject, 'id'>) => {
+    try {
+      const res = await apiCreateSubject({
+        code: newSub.code,
+        name: newSub.name,
+        credits: newSub.credits,
+        semesterId: Number(newSub.semesterId),
+        status: newSub.grade === 'IP' ? 'ACTIVE' : 'COMPLETED',
+        color: newSub.color,
+        room: newSub.room,
+        schedule: newSub.schedule,
+        targetGrade: newSub.targetGrade,
+        professorEmail: newSub.professorEmail,
+        professorName: newSub.professorName,
+        grade: newSub.grade
+      });
+      const sub = toFrontendSubject(res.data);
+      setSubjects(prev => [...prev, sub]);
+      triggerNotification('Course Registered', `Curricular record for ${newSub.code}: ${newSub.name} created.`, 'success');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to create subject on backend.', 'warning');
+    }
   };
 
-  const handleUpdateSubject = (id: string, updated: Partial<Subject>) => {
-    setSubjects(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
-    triggerNotification('Course Adjusted', `Specifications for course ${updated.code || 'selected template'} updated.`, 'info');
+  const handleUpdateSubject = async (id: string, updated: Partial<Subject>) => {
+    try {
+      const apiId = Number(id);
+      if (!isNaN(apiId)) {
+        await apiUpdateSubject(apiId, {
+          code: updated.code,
+          name: updated.name,
+          credits: updated.credits,
+          status: updated.grade ? (updated.grade === 'IP' ? 'ACTIVE' : 'COMPLETED') : undefined,
+          color: updated.color,
+          room: updated.room,
+          schedule: updated.schedule,
+          targetGrade: updated.targetGrade,
+          professorEmail: updated.professorEmail,
+          professorName: updated.professorName,
+          grade: updated.grade,
+          semesterId: updated.semesterId ? Number(updated.semesterId) : undefined
+        });
+      }
+      setSubjects(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+      triggerNotification('Course Adjusted', `Specifications for course ${updated.code || 'selected template'} updated.`, 'info');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to update subject on backend.', 'warning');
+    }
   };
 
-  const handleDeleteSubject = (id: string) => {
-    const target = subjects.find(s => s.id === id);
-    setSubjects(prev => prev.filter(s => s.id !== id));
-    // Cascade erase assignments & exams referencing this course
-    setAssignments(prev => prev.filter(a => a.subjectId !== id));
-    setExams(prev => prev.filter(e => e.subjectId !== id));
+  const handleDeleteSubject = async (id: string) => {
+    try {
+      const apiId = Number(id);
+      if (!isNaN(apiId)) {
+        await apiDeleteSubject(apiId);
+      }
+      const target = subjects.find(s => s.id === id);
+      setSubjects(prev => prev.filter(s => s.id !== id));
+      // Cascade erase assignments & exams referencing this course
+      setAssignments(prev => prev.filter(a => a.subjectId !== id));
+      setExams(prev => prev.filter(e => e.subjectId !== id));
 
-    triggerNotification('Course Deleted', `Removed course ${target?.code || ''} and its associated graded credentials.`, 'warning');
+      triggerNotification('Course Deleted', `Removed course ${target?.code || ''} and its associated graded credentials.`, 'warning');
+    } catch (err) {
+      console.error(err);
+      triggerNotification('Error', 'Failed to delete subject on backend.', 'warning');
+    }
   };
+
 
   // ----- ASSIGNMENTS CRUDS -----
   const handleAddAssignment = (newAssign: Omit<Assignment, 'id'>) => {
@@ -447,6 +589,7 @@ export default function App() {
           <SubjectsView
             semesters={semesters}
             subjects={subjects}
+            activeSemesterId={(semesters.find(s => s.isCurrent) || semesters[0])?.id || ''}
             onAddSubject={handleAddSubject}
             onUpdateSubject={handleUpdateSubject}
             onDeleteSubject={handleDeleteSubject}
