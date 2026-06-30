@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Award, 
   TrendingUp, 
@@ -7,7 +7,10 @@ import {
   Sparkles, 
   Scale, 
   BookOpen, 
-  GraduationCap 
+  GraduationCap,
+  Target,
+  BarChart3,
+  Loader2
 } from 'lucide-react';
 import { 
   Semester, 
@@ -17,6 +20,7 @@ import {
   AVAILABLE_GRADES, 
   GradeType 
 } from '../types';
+import { getHistory, predictGPA } from '../api/gpaApi';
 
 interface GpaAnalyticsViewProps {
   semesters: Semester[];
@@ -42,8 +46,59 @@ export default function GpaAnalyticsView({
     return initial;
   });
 
+  // ── Backend GPA History ─────────────────────────────────────────────────────
+  const [gpaHistory, setGpaHistory] = useState<{semesterName: string; sgpa: number; cgpa: number}[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        setHistoryLoading(true);
+        const response = await getHistory();
+        setGpaHistory(response.data);
+      } catch {
+        // History not available — the local chart still functions
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  // ── Weighted Prediction (Backend) ───────────────────────────────────────────
+  const [predAssignment, setPredAssignment] = useState<number>(80);
+  const [predQuiz, setPredQuiz] = useState<number>(75);
+  const [predMid, setPredMid] = useState<number>(78);
+  const [predFinal, setPredFinal] = useState<number>(85);
+  const [predResult, setPredResult] = useState<{
+    average: number;
+    expectedGrade: string;
+    expectedGPA: number;
+    confidence: number;
+    outlook: string;
+  } | null>(null);
+  const [predLoading, setPredLoading] = useState(false);
+
+  const handlePredict = async () => {
+    try {
+      setPredLoading(true);
+      const response = await predictGPA({
+        assignment: predAssignment,
+        quiz: predQuiz,
+        mid: predMid,
+        final: predFinal
+      });
+      setPredResult(response.data);
+    } catch (err: any) {
+      console.error('Prediction failed:', err?.response?.data?.message || err.message);
+    } finally {
+      setPredLoading(false);
+    }
+  };
+
   const handlePredictGradeChange = (subId: string, gradeStr: GradeType) => {
     setPredictions({ ...predictions, [subId]: gradeStr });
+
   };
 
   // GPA calculation algorithms
@@ -401,6 +456,186 @@ export default function GpaAnalyticsView({
           </div>
         )}
       </div>
+
+      {/* ── Weighted GPA Prediction (Backend API) ───────────────────────── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold font-headline text-slate-950 flex items-center gap-1.5">
+              <Target className="text-violet-600" size={20} />
+              <span>Weighted Grade Predictor</span>
+            </h3>
+            <p className="text-xs text-slate-400 font-sans">
+              Enter your assessment scores and we'll predict your expected grade and GPA impact.
+              <span className="ml-1 font-medium text-slate-500">
+                Weights: Assignments 20% · Quizzes 10% · Mid 30% · Final 40%
+              </span>
+            </p>
+          </div>
+          {predResult && (
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1 shrink-0 font-sans border ${
+              predResult.outlook === 'Excellent'
+                ? 'bg-emerald-50 border-emerald-100 text-emerald-800'
+                : predResult.outlook === 'Good'
+                ? 'bg-blue-50 border-blue-100 text-blue-800'
+                : 'bg-amber-50 border-amber-100 text-amber-800'
+            }`}>
+              <Sparkles size={13} className="shrink-0" />
+              <span>{predResult.outlook}</span>
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Score Inputs */}
+          <div className="space-y-4">
+            {[
+              { label: 'Assignments', value: predAssignment, setter: setPredAssignment, weight: '20%', color: 'blue' },
+              { label: 'Quiz Average', value: predQuiz, setter: setPredQuiz, weight: '10%', color: 'cyan' },
+              { label: 'Mid Exam', value: predMid, setter: setPredMid, weight: '30%', color: 'violet' },
+              { label: 'Final Exam', value: predFinal, setter: setPredFinal, weight: '40%', color: 'rose' },
+            ].map(({ label, value, setter, weight, color }) => (
+              <div key={label} className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-700 font-sans">{label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-${color}-50 text-${color}-700 border border-${color}-100 font-sans`}>{weight}</span>
+                    <span className="text-xs font-mono font-bold text-slate-800 w-8 text-right">{value}</span>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={value}
+                  onChange={(e) => setter(Number(e.target.value))}
+                  className="w-full h-2 rounded-full appearance-none cursor-pointer accent-blue-600"
+                />
+                <div className="flex justify-between text-[9px] text-slate-300 font-mono">
+                  <span>0</span><span>50</span><span>100</span>
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={handlePredict}
+              disabled={predLoading}
+              className="w-full mt-2 py-2.5 px-4 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {predLoading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <BarChart3 size={16} />
+              )}
+              {predLoading ? 'Calculating...' : 'Predict My Grade'}
+            </button>
+          </div>
+
+          {/* Prediction Result */}
+          <div className="flex flex-col justify-center">
+            {predResult ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-sans block mb-1">Avg Score</span>
+                    <span className="text-3xl font-extrabold font-headline text-slate-900">{predResult.average.toFixed(1)}</span>
+                    <span className="text-xs text-slate-400 font-sans block">/ 100</span>
+                  </div>
+                  <div className="bg-violet-50 rounded-2xl p-4 text-center border border-violet-100">
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-violet-400 font-sans block mb-1">Expected Grade</span>
+                    <span className="text-3xl font-extrabold font-headline text-violet-700">{predResult.expectedGrade}</span>
+                    <span className="text-xs text-violet-400 font-sans block">{predResult.expectedGPA.toFixed(1)} pts</span>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-violet-50 to-blue-50 rounded-2xl p-4 border border-violet-100/50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-600 font-sans">Expected GPA</span>
+                    <span className="text-lg font-extrabold font-headline text-violet-700">{predResult.expectedGPA.toFixed(1)} / 4.0</span>
+                  </div>
+                  {/* GPA Bar */}
+                  <div className="w-full h-2 bg-white rounded-full border border-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
+                      style={{ width: `${(predResult.expectedGPA / 4.0) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-600 font-sans">Confidence</span>
+                    <span className="text-xs font-bold text-emerald-600 font-mono">{predResult.confidence}%</span>
+                  </div>
+                  <p className={`text-xs font-semibold font-sans ${
+                    predResult.outlook === 'Excellent' ? 'text-emerald-700' :
+                    predResult.outlook === 'Good' ? 'text-blue-700' : 'text-amber-700'
+                  }`}>
+                    {predResult.outlook === 'Excellent' && '🎉 Excellent! You\'re on track for top marks.'}
+                    {predResult.outlook === 'Good' && '✅ Good performance! Keep it consistent.'}
+                    {predResult.outlook === 'Needs Improvement' && '⚠️ Needs more effort — focus on finals.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="py-10 text-center text-slate-400 bg-slate-50 border border-dashed rounded-xl">
+                <BarChart3 className="mx-auto mb-2 text-slate-300" size={32} />
+                <p className="font-sans text-xs font-medium">Adjust the sliders and click</p>
+                <p className="font-sans text-xs text-slate-300">"Predict My Grade" to see results</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Backend GPA History Table ────────────────────────────────────────── */}
+      {(gpaHistory.length > 0 || historyLoading) && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <h3 className="text-md font-bold font-headline text-slate-950 flex items-center gap-1.5 mb-4">
+            <GraduationCap className="text-blue-600" size={18} />
+            <span>Official GPA Record</span>
+            <span className="ml-auto text-[10px] text-slate-400 font-sans font-normal">Synced from GPA Service</span>
+          </h3>
+
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+              <Loader2 size={18} className="animate-spin" />
+              <span className="text-xs font-sans">Loading history...</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs font-sans">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left py-2 px-3 text-slate-400 font-bold uppercase tracking-wider text-[10px]">Semester</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-bold uppercase tracking-wider text-[10px]">SGPA</th>
+                    <th className="text-center py-2 px-3 text-slate-400 font-bold uppercase tracking-wider text-[10px]">CGPA</th>
+                    <th className="text-right py-2 px-3 text-slate-400 font-bold uppercase tracking-wider text-[10px]">Trend</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {gpaHistory.map((record, i) => {
+                    const prevCgpa = i > 0 ? gpaHistory[i - 1].cgpa : null;
+                    const trend = prevCgpa === null ? null : record.cgpa > prevCgpa ? '↑' : record.cgpa < prevCgpa ? '↓' : '→';
+                    return (
+                      <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3 font-medium text-slate-800">{record.semesterName}</td>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-blue-700">{record.sgpa.toFixed(2)}</td>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-slate-800">{record.cgpa.toFixed(2)}</td>
+                        <td className="py-3 px-3 text-right">
+                          {trend && (
+                            <span className={`font-bold text-sm ${
+                              trend === '↑' ? 'text-emerald-500' :
+                              trend === '↓' ? 'text-rose-500' : 'text-slate-400'
+                            }`}>{trend}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );
