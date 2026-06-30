@@ -42,6 +42,13 @@ import {
   toFrontendExam,
   toBackendExamStatus
 } from './api/examApi';
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification as apiDeleteNotification,
+  type Notification as BackendNotification
+} from './api/notificationApi';
 
 // Import baseline preloaded data & types
 import {
@@ -206,34 +213,82 @@ export default function App() {
     setNotifications(prev => [alert, ...prev]);
   };
 
+  // ── Map backend notification to local Notification shape ──────────────────
+  const mapBackendNotification = (n: BackendNotification): Notification => ({
+    id: String(n.id),
+    title: n.title,
+    message: n.message,
+    type: n.type === 'ASSIGNMENT' || n.type === 'EXAM' ? 'warning'
+        : n.type === 'GPA' || n.type === 'GOAL' ? 'success'
+        : 'info',
+    date: n.createdAt,
+    read: n.isRead
+  });
+
   // ----- DATA FETCH ON AUTH LOGIN -----
   useEffect(() => {
     if (user) {
-      const loadAcademicData = async () => {
+      const loadData = async () => {
         try {
           const semRes = await apiGetSemesters();
-          if (semRes.data) {
-            setSemesters(semRes.data.map(toFrontendSemester));
-          }
+          if (semRes.data) setSemesters(semRes.data.map(toFrontendSemester));
           const subRes = await apiGetSubjects();
-          if (subRes.data) {
-            setSubjects(subRes.data.map(toFrontendSubject));
-          }
+          if (subRes.data) setSubjects(subRes.data.map(toFrontendSubject));
           const assignRes = await apiGetAssignments();
-          if (assignRes.data) {
-            setAssignments(assignRes.data.map(toFrontendAssignment));
-          }
+          if (assignRes.data) setAssignments(assignRes.data.map(toFrontendAssignment));
           const examRes = await apiGetExams();
-          if (examRes.data) {
-            setExams(examRes.data.map(toFrontendExam));
-          }
+          if (examRes.data) setExams(examRes.data.map(toFrontendExam));
         } catch (err) {
-          console.error("Failed to load academic data from backend:", err);
+          console.error('Failed to load academic data from backend:', err);
+        }
+        try {
+          const notifRes = await getNotifications();
+          if (notifRes.data) setNotifications(notifRes.data.map(mapBackendNotification));
+        } catch (err) {
+          console.error('Failed to load notifications from backend:', err);
         }
       };
-      loadAcademicData();
+      loadData();
     }
   }, [user]);
+
+  // ── Notification handlers ──────────────────────────────────────────────────
+  const handleMarkRead = async (id: string) => {
+    try {
+      await markNotificationRead(Number(id));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    }
+  };
+
+  const handleClearAll = async () => {
+    const unread = notifications.filter(n => !n.read);
+    for (const n of unread) {
+      try { await apiDeleteNotification(Number(n.id)); } catch {}
+    }
+    const read = notifications.filter(n => n.read);
+    for (const n of read) {
+      try { await apiDeleteNotification(Number(n.id)); } catch {}
+    }
+    setNotifications([]);
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await apiDeleteNotification(Number(id));
+    } catch {}
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   // ----- SEMESTERS CRUDS -----
   const handleAddSemester = async (name: string, year: number, startDate: string, endDate: string, isCurrent: boolean) => {
@@ -579,23 +634,8 @@ export default function App() {
     triggerNotification('Academic Identity Upgraded', 'System variables compiled to your new student targets.', 'success');
   };
 
-  // ----- NOTIFICATIONS CRUDS -----
-  const handleMarkRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
 
-  const handleMarkAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    triggerNotification('Directory Cleared', 'Marked all system alerts as read.', 'info');
-  };
 
-  const handleClearAll = () => {
-    setNotifications([]);
-  };
-
-  const handleDeleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
 
   // ----- GLOBAL DATA CONTROL UTILITIES -----
   const handleResetData = () => {
