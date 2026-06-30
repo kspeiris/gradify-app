@@ -1,9 +1,15 @@
-exports.predictGPA = (assignment, quiz, mid, expectedFinal) => {
+exports.predictGPA = (midAssignments, final) => {
+  // Calculate weighted average: Mid 30%, Final 70%
+  // Mid is calculated from average of all mid assignments
+  let midAverage = 0;
+  if (midAssignments && midAssignments.length > 0) {
+    const total = midAssignments.reduce((sum, a) => sum + Number(a.score || 0), 0);
+    midAverage = total / midAssignments.length;
+  }
+
   const average = (
-    assignment * 0.20 +
-    quiz * 0.10 +
-    mid * 0.30 +
-    expectedFinal * 0.40
+    midAverage * 0.30 +
+    Number(final) * 0.70
   );
 
   let grade = "F";

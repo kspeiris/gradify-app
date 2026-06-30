@@ -2,18 +2,17 @@ const service = require("../services/predict.service");
 
 exports.predict = (req, res) => {
   try {
-    const { assignment, quiz, mid, final } = req.body;
+    const { midAssignments, final } = req.body;
 
-    if (assignment === undefined || quiz === undefined || mid === undefined || final === undefined) {
-      return res.status(400).json({ message: "assignment, quiz, mid, and final scores are required." });
+    if (!Array.isArray(midAssignments) || final === undefined) {
+      return res.status(400).json({ message: "midAssignments array and final score are required." });
     }
 
-    const result = service.predictGPA(
-      Number(assignment),
-      Number(quiz),
-      Number(mid),
-      Number(final)
-    );
+    if (midAssignments.length === 0) {
+      return res.status(400).json({ message: "At least one mid assignment is required." });
+    }
+
+    const result = service.predictGPA(midAssignments, final);
 
     return res.json(result);
   } catch (error) {
