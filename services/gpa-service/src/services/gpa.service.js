@@ -1,6 +1,7 @@
 const prisma = require("../config/prisma");
 const { gradePoints } = require("../utils/gpa.utils");
 const academicClient = require("../utils/academic.client");
+const notificationClient = require("../utils/notification.client");
 
 const FALLBACK = {
   sgpa: 0,
@@ -163,6 +164,16 @@ exports.calculateGPA = async (studentId, semesterId, token) => {
       cgpa
     }
   });
+
+  // 5. Fire GPA notification (non-blocking)
+  notificationClient.createNotification(
+    studentId,
+    "New GPA Calculated",
+    `Your SGPA for ${semesterName} is ${sgpa}. CGPA: ${cgpa}.`,
+    "GPA",
+    "LOW",
+    token
+  ).catch(() => {});
 
   return {
     sgpa,
